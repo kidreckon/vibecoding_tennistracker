@@ -1,0 +1,14 @@
+{
+  "name": "Rally Reframe — vertical tennis clips",
+  "short_name": "Rally Reframe",
+  "description": "Turn 16:9 tennis footage into vertical clips that auto-follow the player and ball. Runs on-device, free and offline.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f1214",
+  "theme_color": "#0b7d3e",
+  "icons": [
+    { "src": "./icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

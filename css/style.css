@@ -1,0 +1,86 @@
+:root {
+  --bg: #0f1214;
+  --card: #181d21;
+  --line: #2a3339;
+  --green: #14b357;
+  --green-d: #0b7d3e;
+  --text: #eef2f4;
+  --muted: #9aa7ae;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+main {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 20px 16px calc(20px + env(safe-area-inset-bottom));
+}
+
+header h1 { margin: 8px 0 4px; font-size: 26px; }
+.tag { margin: 0 0 16px; color: var(--muted); font-size: 14px; line-height: 1.4; }
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.hidden { display: none !important; }
+
+.filebtn { display: block; position: relative; }
+.filebtn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.filebtn span,
+.primary {
+  display: block;
+  text-align: center;
+  background: var(--green);
+  color: #04140a;
+  font-weight: 700;
+  padding: 14px;
+  border-radius: 12px;
+  border: none;
+  width: 100%;
+  font-size: 16px;
+  cursor: pointer;
+  text-decoration: none;
+}
+.primary:active { background: var(--green-d); }
+.primary:disabled { opacity: .5; }
+
+.ghost {
+  display: block; width: 100%; margin-top: 10px;
+  background: transparent; color: var(--muted);
+  border: 1px solid var(--line); border-radius: 12px;
+  padding: 12px; font-size: 15px; cursor: pointer;
+}
+
+.hint { color: var(--muted); font-size: 13px; margin: 12px 2px 0; }
+
+.previews { display: flex; gap: 12px; }
+.preview { flex: 1; min-width: 0; }
+.plabel { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+video, canvas { width: 100%; border-radius: 10px; background: #000; display: block; }
+#out { aspect-ratio: 9 / 16; object-fit: contain; }
+#src { aspect-ratio: 16 / 9; }
+
+.controls { margin: 16px 0; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 12px 0; font-size: 14px; }
+.row input[type=range] { flex: 0 0 45%; accent-color: var(--green); }
+
+.progress { margin-top: 14px; text-align: center; }
+.bar { height: 8px; background: #0c0f11; border-radius: 6px; overflow: hidden; }
+#barfill { height: 100%; width: 0%; background: var(--green); transition: width .15s; }
+#stage { display: block; margin-top: 8px; font-size: 13px; color: var(--muted); }
+
+footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 8px; }
+#resultVideo { max-height: 60vh; margin-bottom: 12px; }
