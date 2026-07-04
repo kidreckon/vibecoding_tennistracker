@@ -13,14 +13,25 @@ any AI training — it uses a pre-trained detector (COCO-SSD, which already know
 
 1. **Analyze** — the video is stepped through frame by frame; a pre-trained
    model detects players and the ball in each sampled frame.
-2. **Plan the camera** — each frame gets a target center point (players weighted
-   by size, ball weighted up by the "follow the ball" slider). The raw path is
-   smoothed with exponential smoothing + a max pan-speed cap so the camera
-   glides instead of jumping.
-3. **Render** — the source plays back while a moving 9:16 crop is drawn to a
-   canvas and captured (with the original audio) into a downloadable clip.
+2. **Plan the camera** — each frame gets a target framing: a **center** (players'
+   box center, nudged toward the ball by the "follow the ball" slider) and a
+   **zoom** (crop height sized to contain the action — tight on one player, wider
+   for a spread-out rally). Center *and* zoom are smoothed with exponential
+   smoothing + max-speed caps so the camera glides instead of jumping.
+3. **Auto-trim** — a per-frame activity score (how much the action moves, plus a
+   ball-visible nudge) flags dead time; low-activity spans are dropped and the
+   kept segments get a small margin so cuts aren't abrupt.
+4. **Render** — the source plays back while the moving/zooming 9:16 crop is drawn
+   to a canvas and captured (with the original audio) into a downloadable clip.
+   Dead segments are skipped by seeking across them mid-recording.
 
-See `js/tracker.js` (analysis + smoothing) and `js/renderer.js` (crop + encode).
+See `js/tracker.js` (framing, zoom, smoothing, segments) and `js/renderer.js`
+(crop + encode).
+
+### Controls
+- **Zoom to the action** — pan *and* zoom (off = pan only, full frame height).
+- **Auto-trim dead time** — drop the gaps between rallies.
+- **Follow the ball** / **Camera smoothness** — framing bias and glide amount.
 
 ## Try it locally
 
@@ -51,8 +62,10 @@ python3 -m http.server 8000
 
 - Best on **short clips** (a rally or ~30–60s). In-browser processing is slower
   and more memory-limited than a desktop; long matches should be split up.
-- Only horizontal panning for now (full frame height is kept). Good for a fixed,
-  elevated camera filming the court.
+- Auto-trim uses one continuous recording and seeks across dead spans, so each
+  cut has a brief (~fraction of a second) freeze/audio-jump. A future upgrade is
+  `ffmpeg.wasm` to render segments and concatenate them cleanly (and get
+  consistent mp4 output on every browser).
 - Ball detection from a generic model is rough (the ball is tiny and fast). A
   future upgrade is swapping in **TrackNet**, a model trained specifically for
   tennis ball tracking, via ONNX Runtime Web.
@@ -62,6 +75,5 @@ python3 -m http.server 8000
 ## Roadmap ideas
 
 - TrackNet for real ball tracking; court-line detection to know in/out.
-- Zoom (not just pan) so both players stay framed in wide rallies.
-- Auto-trim dead time between rallies.
+- `ffmpeg.wasm` for glitch-free trimmed cuts + consistent mp4 output.
 - Shot classification (forehand/backhand/serve) and, eventually, scoring.

@@ -59,19 +59,19 @@ go.addEventListener('click', async () => {
   try {
     const m = await getModel();
 
-    const H = src.videoHeight;
-    const cropWidth = Math.min(src.videoWidth, Math.round(H * 9 / 16));
     const opts = {
       ballBias: Number($('ballBias').value),
       smoothness: Number($('smooth').value),
-      cropWidth,
+      zoom: $('zoom').checked,
+      autotrim: $('autotrim').checked,
     };
 
     setStage('Tracking the action…', 0);
-    const path = await analyze(m, src, opts, (p) => setStage('Tracking the action…', p * 0.6));
+    const { path, segments } = await analyze(m, src, opts,
+      (p) => setStage('Tracking the action…', p * 0.6));
 
     setStage('Rendering vertical clip…', 0.6);
-    const { blob } = await render(src, out, path, cropWidth,
+    const { blob } = await render(src, out, path, segments,
       (p) => setStage('Rendering vertical clip…', 0.6 + p * 0.4));
 
     const url = URL.createObjectURL(blob);

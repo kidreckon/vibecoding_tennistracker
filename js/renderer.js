@@ -1,8 +1,9 @@
-// renderer.js — render pass: play the source at normal speed, draw the moving
-// vertical crop onto a canvas, and capture that canvas (plus source audio) with
-// MediaRecorder into a downloadable clip. No server, no upload.
+// renderer.js — render pass: play the source, draw the moving/zooming 9:16 crop
+// onto a canvas, and capture it (plus source audio) with MediaRecorder. Dead
+// segments are skipped by seeking across them within one continuous recording
+// (lightweight auto-trim — expect a brief freeze at each cut).
 
-import { seek, centerAt } from './tracker.js';
+import { seek, sampleAt } from './tracker.js';
 
 /** Pick the best container/codec this browser can actually record. */
 export function pickMime() {
@@ -25,17 +26,20 @@ function onFrame(video, cb) {
   else requestAnimationFrame(() => cb());
 }
 
+const AR = 9 / 16;
+
 /**
+ * @param segments {start,end}[] active spans to keep (in order)
  * @returns {Promise<{blob: Blob, mime: string}>}
  */
-export async function render(video, canvas, path, cropWidth, onProgress) {
-  const W = video.videoWidth;
-  const H = video.videoHeight;
+export async function render(video, canvas, path, segments, onProgress) {
+  const W = video.videoWidth, H = video.videoHeight;
 
-  // Output is the vertical slice at native resolution (capped to 1080 tall).
-  const scale = Math.min(1, 1080 / H);
-  canvas.width = Math.round(cropWidth * scale);
-  canvas.height = Math.round(H * scale);
+  // Fixed 9:16 output canvas (capped to 1080 tall); zoom is done in the source
+  // rectangle, so the output size stays constant.
+  const outH = Math.min(1080, Math.round(H));
+  canvas.height = outH;
+  canvas.width = Math.round(outH * AR);
   const ctx = canvas.getContext('2d');
 
   // Compose: canvas video track + original audio (when the browser exposes it).
@@ -57,22 +61,34 @@ export async function render(video, canvas, path, cropWidth, onProgress) {
   recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
   const stopped = new Promise((r) => (recorder.onstop = r));
 
-  await seek(video, 0);
-  recorder.start();
-  await video.play();
+  const drawFrame = () => {
+    const f = sampleAt(path, video.currentTime);
+    const cw = f.h * AR;
+    const sx = Math.min(Math.max(f.cx - cw / 2, 0), W - cw);
+    const sy = Math.min(Math.max(f.cy - f.h / 2, 0), H - f.h);
+    ctx.drawImage(video, sx, sy, cw, f.h, 0, 0, canvas.width, canvas.height);
+  };
 
-  await new Promise((resolve) => {
-    const draw = () => {
-      const cx = centerAt(path, video.currentTime);
-      const sx = Math.min(Math.max(cx - cropWidth / 2, 0), W - cropWidth);
-      ctx.drawImage(video, sx, 0, cropWidth, H, 0, 0, canvas.width, canvas.height);
-      onProgress(Math.min(1, video.currentTime / video.duration));
-      if (video.ended || video.paused) return resolve();
+  const total = segments.reduce((s, seg) => s + (seg.end - seg.start), 0) || video.duration;
+  let done = 0;
+
+  recorder.start();
+  for (const seg of segments) {
+    await seek(video, seg.start);
+    await video.play();
+    await new Promise((resolve) => {
+      const draw = () => {
+        if (video.currentTime >= seg.end || video.ended) return resolve();
+        drawFrame();
+        onProgress(Math.min(1, (done + (video.currentTime - seg.start)) / total));
+        onFrame(video, draw);
+      };
+      video.onended = resolve;
       onFrame(video, draw);
-    };
-    video.onended = resolve;
-    onFrame(video, draw);
-  });
+    });
+    video.pause();
+    done += seg.end - seg.start;
+  }
 
   recorder.stop();
   await stopped;
