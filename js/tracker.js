@@ -116,15 +116,27 @@ function buildSegments(raw, duration, H, step, autotrim) {
  * @returns {Promise<{ path: {t,cx,cy,h}[], segments: {start,end}[] }>}
  */
 export async function analyze(model, video, opts, onProgress) {
-  const { ballBias, smoothness, zoom, autotrim, sampleFps = 8 } = opts;
+  const { ballBias, smoothness, zoom, autotrim, sampleFps = 4 } = opts;
   const W = video.videoWidth, H = video.videoHeight, duration = video.duration;
   const step = 1 / sampleFps;
   const hMin = Math.round(H * ZOOM_MIN_FRAC);
 
+  // Detect on a downscaled copy of each frame — inference on a ~480px image is
+  // far faster on a phone than on full 1080p/4K, and we scale boxes back up.
+  const DET_W = 480;
+  const s = Math.min(1, DET_W / W);
+  const dW = Math.max(1, Math.round(W * s)), dH = Math.max(1, Math.round(H * s));
+  const dcanvas = document.createElement('canvas');
+  dcanvas.width = dW; dcanvas.height = dH;
+  const dctx = dcanvas.getContext('2d');
+  const inv = 1 / s;
+
   const raw = [];
   for (let t = 0; t < duration; t += step) {
     await seek(video, t);
-    const preds = await model.detect(video);
+    dctx.drawImage(video, 0, 0, dW, dH);
+    const preds = await model.detect(dcanvas);
+    for (const p of preds) p.bbox = [p.bbox[0] * inv, p.bbox[1] * inv, p.bbox[2] * inv, p.bbox[3] * inv];
     raw.push({ t, ...measure(preds, W, H, ballBias, hMin, zoom) });
     onProgress(Math.min(1, t / duration));
   }
