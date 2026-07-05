@@ -47,8 +47,12 @@
         <input type="checkbox" id="autotrim" checked />
       </label>
       <label class="row">
-        <span>Follow the ball more aggressively</span>
-        <input type="range" id="ballBias" min="0" max="10" value="5" />
+        <span>Follow</span>
+        <select id="follow">
+          <option value="me" selected>Me (nearest player)</option>
+          <option value="both">Both players</option>
+          <option value="ball">The ball</option>
+        </select>
       </label>
       <label class="row">
         <span>Camera smoothness</span>

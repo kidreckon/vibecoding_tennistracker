@@ -19,46 +19,59 @@ export function seek(video, t) {
 }
 
 /**
- * Turn one frame's detections into a framing {cx, cy, h, ball, present}:
- * a bounding box around all players + ball, its center (optionally nudged
- * toward the ball by ballBias), and the 9:16 crop height needed to contain it.
+ * Turn one frame's detections into a framing {cx, cy, h, ball, present}.
+ *
+ * `follow` decides who the camera locks onto — crucial when the scene has more
+ * than the one player (an opponent across the net, bystanders on the side):
+ *   'me'   -> the nearest/largest person only (you), ignoring distant people
+ *   'both' -> the two largest people (you + opponent), ignoring bystanders
+ *   'ball' -> center on the ball, keeping the nearest player in view
+ * The crop height h is sized to contain the chosen subject(s).
  */
-function measure(preds, W, H, ballBias, hMin, zoom) {
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  let bx = 0, by = 0, bn = 0, present = false;
+function measure(preds, W, H, hMin, zoom, follow) {
+  const persons = [], balls = [];
   for (const p of preds) {
     const [x, y, w, h] = p.bbox;
-    if (p.class === 'person' && p.score > 0.4) {
-      present = true;
-      minX = Math.min(minX, x); minY = Math.min(minY, y);
-      maxX = Math.max(maxX, x + w); maxY = Math.max(maxY, y + h);
-    } else if (p.class === 'sports ball' && p.score > 0.3) {
-      present = true;
-      minX = Math.min(minX, x); minY = Math.min(minY, y);
-      maxX = Math.max(maxX, x + w); maxY = Math.max(maxY, y + h);
-      bx += x + w / 2; by += y + h / 2; bn++;
-    }
+    if (p.class === 'person' && p.score > 0.4)
+      persons.push({ minX: x, minY: y, maxX: x + w, maxY: y + h, area: w * h });
+    else if (p.class === 'sports ball' && p.score > 0.3)
+      balls.push({ cx: x + w / 2, cy: y + h / 2, minX: x, minY: y, maxX: x + w, maxY: y + h });
   }
-  if (!present) return { cx: null, cy: null, h: null, ball: false, present: false };
+  if (!persons.length && !balls.length)
+    return { cx: null, cy: null, h: null, ball: false, present: false };
 
-  let cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
-  const ball = bn > 0;
-  if (ball && ballBias > 0) {                 // lean framing toward the ball
-    const k = Math.min(0.6, (ballBias / 10) * 0.6);
-    cx += (bx / bn - cx) * k;
-    cy += (by / bn - cy) * k;
+  // Nearest players = the largest by on-screen area (closest to the camera).
+  persons.sort((a, b) => b.area - a.area);
+  const chosen = follow === 'both' ? persons.slice(0, 2) : persons.slice(0, 1);
+
+  const box = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+  const add = (o) => {
+    box.minX = Math.min(box.minX, o.minX); box.minY = Math.min(box.minY, o.minY);
+    box.maxX = Math.max(box.maxX, o.maxX); box.maxY = Math.max(box.maxY, o.maxY);
+  };
+  (chosen.length ? chosen : [balls[0]]).forEach(add);
+
+  const ball = balls.length > 0;
+  let cx, cy;
+  if (follow === 'ball' && ball) {            // center on the ball; keep player in the box
+    let sx = 0, sy = 0;
+    for (const b of balls) { sx += b.cx; sy += b.cy; add(b); }
+    cx = sx / balls.length; cy = sy / balls.length;
+  } else {                                    // center on the chosen player(s)
+    cx = (box.minX + box.maxX) / 2;
+    cy = (box.minY + box.maxY) / 2;
   }
 
   let h;
   if (!zoom) {                                // pan-only: keep full height
     h = H; cy = H / 2;
   } else {                                     // size the crop to contain the box
-    const halfW = Math.max(maxX - cx, cx - minX);
-    const halfH = Math.max(maxY - cy, cy - minY);
+    const halfW = Math.max(box.maxX - cx, cx - box.minX);
+    const halfH = Math.max(box.maxY - cy, cy - box.minY);
     h = Math.max(halfH * 2, (halfW * 2) / AR) * PAD;
     h = Math.min(Math.max(h, hMin), H);
   }
-  return { cx, cy, h, ball, present };
+  return { cx, cy, h, ball, present: true };
 }
 
 /** Forward/backward fill null samples so smoothing has a continuous signal. */
@@ -116,7 +129,7 @@ function buildSegments(raw, duration, H, step, autotrim) {
  * @returns {Promise<{ path: {t,cx,cy,h}[], segments: {start,end}[] }>}
  */
 export async function analyze(model, video, opts, onProgress) {
-  const { ballBias, smoothness, zoom, autotrim, sampleFps = 4 } = opts;
+  const { follow = 'me', smoothness, zoom, autotrim, sampleFps = 4 } = opts;
   const W = video.videoWidth, H = video.videoHeight, duration = video.duration;
   const step = 1 / sampleFps;
   const hMin = Math.round(H * ZOOM_MIN_FRAC);
@@ -137,7 +150,7 @@ export async function analyze(model, video, opts, onProgress) {
     dctx.drawImage(video, 0, 0, dW, dH);
     const preds = await model.detect(dcanvas);
     for (const p of preds) p.bbox = [p.bbox[0] * inv, p.bbox[1] * inv, p.bbox[2] * inv, p.bbox[3] * inv];
-    raw.push({ t, ...measure(preds, W, H, ballBias, hMin, zoom) });
+    raw.push({ t, ...measure(preds, W, H, hMin, zoom, follow) });
     onProgress(Math.min(1, t / duration));
   }
   fillRecords(raw, W, H);

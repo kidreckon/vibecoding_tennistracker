@@ -60,7 +60,7 @@ go.addEventListener('click', async () => {
     const m = await getModel();
 
     const opts = {
-      ballBias: Number($('ballBias').value),
+      follow: $('follow').value,
       smoothness: Number($('smooth').value),
       zoom: $('zoom').checked,
       autotrim: $('autotrim').checked,

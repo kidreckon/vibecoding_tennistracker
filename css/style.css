@@ -76,6 +76,10 @@ video, canvas { width: 100%; border-radius: 10px; background: #000; display: blo
 .controls { margin: 16px 0; }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 12px 0; font-size: 14px; }
 .row input[type=range] { flex: 0 0 45%; accent-color: var(--green); }
+.row select {
+  flex: 0 0 55%; background: #0c0f11; color: var(--text);
+  border: 1px solid var(--line); border-radius: 8px; padding: 8px; font-size: 14px;
+}
 
 .progress { margin-top: 14px; text-align: center; }
 .bar { height: 8px; background: #0c0f11; border-radius: 6px; overflow: hidden; }
