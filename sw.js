@@ -1,6 +1,7 @@
-// Minimal offline cache for the app shell. The ML library + weights are fetched
-// from CDN on first run and cached opportunistically so later runs work offline.
-const CACHE = 'rally-reframe-v1';
+// Offline cache. App files use network-first so code updates load as soon as
+// you're online (falling back to cache offline); the big immutable CDN model
+// files use cache-first. Bump CACHE to invalidate old app files on deploy.
+const CACHE = 'rally-reframe-v2';
 const SHELL = [
   './',
   './index.html',
@@ -24,19 +25,31 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// Cache-first for the shell, stale-while-revalidate for everything else (incl. CDN).
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
-  e.respondWith(
-    caches.match(e.request).then((cached) => {
-      const network = fetch(e.request).then((res) => {
+  const sameOrigin = new URL(e.request.url).origin === self.location.origin;
+
+  if (sameOrigin) {
+    // Network-first: always try for the freshest app code, cache as we go.
+    e.respondWith(
+      fetch(e.request).then((res) => {
+        if (res && res.status === 200) {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
+        }
+        return res;
+      }).catch(() => caches.match(e.request))
+    );
+  } else {
+    // Cache-first for CDN (model library + weights): big and immutable.
+    e.respondWith(
+      caches.match(e.request).then((cached) => cached || fetch(e.request).then((res) => {
         if (res && res.status === 200 && res.type !== 'opaque') {
           const copy = res.clone();
           caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
         }
         return res;
-      }).catch(() => cached);
-      return cached || network;
-    })
-  );
+      }))
+    );
+  }
 });
